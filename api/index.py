@@ -12,7 +12,14 @@ def home():
 def proxy(path):
     url = f"{GROQ_API_BASE}/{path}"
     params = request.args.to_dict()
-    headers = {key: value for key, value in request.headers if key.lower() != 'host'}
+    headers = {}
+    for key, value in request.headers:
+        lower_key = key.lower()
+        if lower_key not in ['host', 'accept-encoding']:
+            headers[key] = value
+    
+    # Explicitly request uncompressed response
+    headers['Accept-Encoding'] = 'identity'
     data = request.get_data()
     
     try:
@@ -22,15 +29,24 @@ def proxy(path):
             headers=headers,
             params=params,
             data=data,
-            allow_redirects=False,
-            stream=True
+            allow_redirects=False
         )
         
-        excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
-        response_headers = [(name, value) for name, value in resp.headers.items()
-                           if name.lower() not in excluded_headers]
+        excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection', 'keep-alive']
+        response_headers = {}
         
-        return Response(resp.content, resp.status_code, response_headers)
+        for name, value in resp.headers.items():
+            if name.lower() not in excluded_headers:
+                response_headers[name] = value
+        
+        if 'content-type' not in response_headers:
+            response_headers['Content-Type'] = 'application/json'
+        
+        return Response(
+            resp.content, 
+            resp.status_code, 
+            response_headers
+        )
     
     except Exception as e:
         return {"error": str(e)}, 500
