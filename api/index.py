@@ -29,7 +29,8 @@ def proxy(path):
             headers=headers,
             params=params,
             data=data,
-            allow_redirects=False
+            allow_redirects=False,
+            stream=True
         )
         
         excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection', 'keep-alive']
