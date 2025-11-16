@@ -1,32 +1,39 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
+from flask import Flask, request, Response
 import requests
 
 app = Flask(__name__)
-CORS(app)
 
-@app.route('/', defaults={'path': ''})
-@app.route('/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE'])
-def proxy_all_requests(path):
-    target_url = f"https://api.groq.com/{path}"
-    headers = dict(request.headers)
-    headers.pop('Host', None)
+# Groq API base URL
+GROQ_API_BASE = "https://api.groq.com"
+
+@app.route('/')
+def home():
+    return 'Groq API Proxy is running! <br><a href="https://github.com/AnkitM1410">github.com/AnkitM1410</a>'
+
+@app.route('/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH'])
+def proxy(path):
+    url = f"{GROQ_API_BASE}/{path}"
+    params = request.args.to_dict()
+    headers = {key: value for key, value in request.headers if key.lower() != 'host'}
+    data = request.get_data()
     
     try:
-        if request.method == 'GET':
-            resp = requests.get(target_url, headers=headers, timeout=30)
-        elif request.method == 'POST':
-            resp = requests.post(target_url, headers=headers, data=request.get_data(), timeout=30)
-        elif request.method == 'PUT':
-            resp = requests.put(target_url, headers=headers, data=request.get_data(), timeout=30)
-        elif request.method == 'DELETE':
-            resp = requests.delete(target_url, headers=headers, timeout=30)
+        # Make the request to Groq API
+        resp = requests.request(
+            method=request.method,
+            url=url,
+            headers=headers,
+            params=params,
+            data=data,
+            allow_redirects=False
+        )
         
-        # Return the response from Groq
-        return jsonify(resp.json()), resp.status_code
+        # Create response with Groq's content
+        excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
+        response_headers = [(name, value) for name, value in resp.raw.headers.items()
+                           if name.lower() not in excluded_headers]
         
-    except requests.RequestException as e:
-        return jsonify({"error": str(e)}), 500
-
-if __name__ == '__main__':
-    app.run()
+        return Response(resp.content, resp.status_code, response_headers)
+    
+    except Exception as e:
+        return {"error": str(e)}, 500
